@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Workspaces/Devprojects/RAG-KnowledgeNexus/frontend/**)",
+      "Bash(npx vite *)"
+    ]
+  }
+}
