@@ -1,0 +1,45 @@
+// ═══════════════════════════════════════════════════
+// Design Tokens — aligns with CSS custom properties
+// ═══════════════════════════════════════════════════
+
+// === Brand Colors (matches --primary / --primary-foreground) ===
+$primary: #1677ff;
+$primary-light: #4096ff;
+$primary-dark: #0958d9;
+$primary-bg: #e6f4ff;
+
+// === Functional Colors (matches --destructive) ===
+$success: #52c41a;
+$warning: #faad14;
+$danger: #ff4d4f;
+$info: #999999;
+
+// === Neutral Colors (matches --foreground / --muted-foreground / --border) ===
+$text-primary: #333333;
+$text-regular: #666666;
+$text-secondary: #999999;
+$text-placeholder: #bfbfbf;
+$border: #e5e6eb;
+$border-light: #f0f0f0;
+$bg-page: #f5f7fa;
+$bg-white: #ffffff;
+
+// === Layout ===
+$sidebar-width: 240px;
+$sidebar-collapsed-width: 64px;
+$navbar-height: 56px;
+$tagsview-height: 40px;
+
+// === Border Radius (matches --radius = 0.625rem) ===
+$radius-sm: 4px;
+$radius-md: 6px;
+$radius-lg: 8px;
+
+// === Shadows ===
+$shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+$shadow-md: 0 1px 4px 0 rgba(0, 0, 0, 0.06);
+$shadow-lg: 0 4px 12px 0 rgba(0, 0, 0, 0.08);
+
+// === Transitions ===
+$transition-fast: 0.2s ease;
+$transition-base: 0.3s ease;
