@@ -1,6 +1,6 @@
 package com.xxr.interceptor;
 
-import com.xxr.utils.BaseContext;
+import com.xxr.utils.CurrentUserUtil;
 import com.xxr.utils.JwtUtil;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +18,9 @@ import javax.servlet.http.HttpServletResponse;
 @Component
 @Slf4j
 public class JwtTokenInterceptor implements HandlerInterceptor {
+
+    @Autowired
+    private CurrentUserUtil currentUserUtil;
 
 /**
      * 校验JWT令牌
@@ -55,7 +58,7 @@ public class JwtTokenInterceptor implements HandlerInterceptor {
             if (claims != null && JwtUtil.verifyToken(claims) == -1) { // -1 表示有效且未到刷新时间
                 Long userId = Long.valueOf(claims.get("id").toString());
                 log.debug("JWT校验成功，当前用户id: {}", userId);
-                BaseContext.setCurrentId(userId);
+                currentUserUtil.setCurrentId(userId);
                 // 通过，放行
                 return true;
             } else {
@@ -69,5 +72,10 @@ public class JwtTokenInterceptor implements HandlerInterceptor {
             response.setStatus(401);
             return false;
         }
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        currentUserUtil.clearCurrentId();
     }
 }

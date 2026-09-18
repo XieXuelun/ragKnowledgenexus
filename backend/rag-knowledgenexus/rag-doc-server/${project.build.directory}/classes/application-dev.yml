@@ -1,0 +1,107 @@
+# =====================================================================
+# RAG 知识库系统 Spring Boot 配置文件
+# =====================================================================
+
+spring:
+  application:
+    name: rag-knowledge-base
+    description: 企业智能文档问答助手
+  config:
+    activate:
+      on-profile: dev
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  datasource:
+    url: jdbc:mysql://192.168.150.101:3306/rag_knowledge_base?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&allowMultiQueries=true
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# =====================================================================
+# 项目自定义配置
+# =====================================================================
+rag:
+  minio:
+    endpoint: http://192.168.150.101:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket:
+      document: rag-documents
+      avatar: user-avatar
+    region: us-east-1
+
+  embedding:
+    provider: aliyun
+    model: text-embedding-v3
+    api-key: sk-344e7a17e33949559ae5aaad3b59b148
+    api-url: https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
+
+  chat:
+    provider: aliyun
+    model: qwen-plus
+    api-key: sk-344e7a17e33949559ae5aaad3b59b148
+    api-url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+
+  qdrant:
+    host: 192.168.150.101
+    port: 6334
+    http-port: 6333
+    use-tls: false
+    dimension: 1024
+
+
+# =====================================================================
+# 日志配置
+# =====================================================================
+logging:
+  level:
+    root: INFO
+    com.rag.system: DEBUG
+    org.springframework: INFO
+    org.mybatis: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/rag-system.log
+    max-size: 10MB
+    max-history: 30
+
+# =====================================================================
+# 服务器配置
+# =====================================================================
+server:
+  port: 8085
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    min-response-size: 1024
+  error:
+    include-message: always
+    include-stacktrace: on_param
+
+# =====================================================================
+# 开发环境特殊配置
+# =====================================================================
+---
+
+logging:
+  level:
+    root: INFO
+    com.rag.system: DEBUG
+    org.springframework.web: DEBUG

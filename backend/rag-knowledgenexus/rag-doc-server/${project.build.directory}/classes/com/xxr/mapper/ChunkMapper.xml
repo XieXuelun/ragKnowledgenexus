@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xxr.mapper.ChunkMapper">
+
+    <delete id="deleteByDocId">
+        DELETE FROM doc_chunk WHERE doc_id = #{docId}
+    </delete>
+
+    <select id="selectByDocId" resultType="com.xxr.document.pojo.DocChunk">
+        SELECT * FROM doc_chunk WHERE doc_id = #{docId} AND is_deleted = 0 ORDER BY chunk_index ASC
+    </select>
+
+
+
+</mapper>

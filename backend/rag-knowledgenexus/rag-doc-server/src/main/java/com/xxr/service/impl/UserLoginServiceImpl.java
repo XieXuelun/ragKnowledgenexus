@@ -9,10 +9,11 @@ import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.DeleteConstants;
 import com.xxr.constant.UserRoleConstant;
 import com.xxr.mapper.AuthMapper;
+import com.xxr.service.PermissionService;
 import com.xxr.service.UserLoginService;
 import com.xxr.user.dtos.UserUpdateRequest;
 import com.xxr.user.pojo.User;
-import com.xxr.utils.BaseContext;
+import com.xxr.utils.CurrentUserUtil;
 import com.xxr.utils.JwtUtil;
 import com.xxr.utils.MinioUtil;
 import io.jsonwebtoken.Claims;
@@ -43,6 +44,10 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
     private AuthMapper authMapper;
     @Autowired
     private MinioUtil minioUtil;
+    @Autowired
+    private CurrentUserUtil currentUserUtil;
+    @Autowired
+    private PermissionService permissionService;
 
     /**
      * 用户登录
@@ -74,7 +79,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户不存在");
         }
 
-        if (user.getStatus() == 0) {
+        if (Integer.valueOf(0).equals(user.getStatus())) {
             log.warn("登录失败: 用户已被禁用 - {}", username);
             return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "用户已被禁用");
         }
@@ -103,25 +108,36 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
     public ResponseResult register(UserRegisterDTO userRegisterDTO) {
         log.info("开始处理用户注册请求");
 
-        if (userRegisterDTO == null) {
-            log.warn("注册失败: 参数为空");
-            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "无效参数");
+        // 1. 基础参数校验
+        if (userRegisterDTO == null
+                || !StringUtils.hasText(userRegisterDTO.getUsername())
+                || !StringUtils.hasText(userRegisterDTO.getPassword())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户名或密码不能为空");
         }
+
+        // 2. 角色合法性校验（放在数据库操作前）
+        Integer role = userRegisterDTO.getRole();
+        if (role == null || !role.equals(UserRoleConstant.EMPLOYEE)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "只能注册为普通员工");
+        }
+
+        // 3. 用户名查重
         String username = userRegisterDTO.getUsername();
-        String password = userRegisterDTO.getPassword();
-       /* Long currentId = BaseContext.getCurrentId();*/
-        int count = Math.toIntExact(authMapper.selectCount(Wrappers.<User>lambdaQuery().eq(User::getUsername, username)));
+        int count = Math.toIntExact(authMapper.selectCount(
+                Wrappers.<User>lambdaQuery().eq(User::getUsername, username)));
         if (count > 0) {
-            log.warn("注册失败: 用户名已存在 - {}", username);
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_EXIST, "用户名已存在");
         }
+
+        // 4. 组装用户（只使用白名单字段）
         User user = new User();
-        BeanUtils.copyProperties(userRegisterDTO, user);
-        user.setCreateTime(LocalDateTime.now());
+        user.setUsername(username);
+        user.setPassword(PASSWORD_ENCODER.encode(userRegisterDTO.getPassword()));
+        user.setNickname(userRegisterDTO.getNickname());
+        user.setRole(UserRoleConstant.EMPLOYEE);
         user.setStatus(1);
-        user.setPassword(PASSWORD_ENCODER.encode(password));
         user.setIsDeleted(DeleteConstants.NOT_DELETED);
-        user.setRole(userRegisterDTO.getRole());
+        user.setCreateTime(LocalDateTime.now());
         save(user);
         log.info("用户注册成功: {}", username);
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
@@ -168,7 +184,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult logout() {
-        BaseContext.removeCurrentId();
+        currentUserUtil.clearCurrentId();
         return ResponseResult.okResult("登出成功");
     }
     /**
@@ -178,7 +194,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
     @Override
     public ResponseResult<User> getUserInfo() {
         //获取当前用户id
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         //校验参数
         if (currentId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
@@ -210,17 +226,34 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult updateUser(UserUpdateRequest userUpdateRequest) {
-        if(userUpdateRequest == null||userUpdateRequest.getId() == null){
+        // 1. 基础参数校验
+        if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "无效参数");
         }
-        User user =new User();
-        BeanUtils.copyProperties(userUpdateRequest, user);
-        //补全属性
+
+        // 2. 查询目标用户
+        User targetUser = getById(userUpdateRequest.getId());
+        if (targetUser == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "用户不存在");
+        }
+
+        // 3. 权限校验（用 equals 替代 !=）
+        Long currentId = currentUserUtil.getCurrentId();
+        boolean isSelf = targetUser.getId().equals(currentId);
+        if (!isSelf && !permissionService.isManager()) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权修改他人信息");
+        }
+
+        // 4. 只允许修改白名单字段，禁止提权
+        User user = new User();
+        user.setId(userUpdateRequest.getId());
+        user.setNickname(userUpdateRequest.getNickname());
+        user.setEmail(userUpdateRequest.getEmail());
         user.setUpdateTime(LocalDateTime.now());
+        // 注意：不要 setRole / setStatus / setPassword
         updateById(user);
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
-
     /**
      * 上传用户头像
      *
@@ -235,7 +268,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
         }
         String avatar = minioUtil.uploadAvatar(file);
         //获取当前用户id
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if (currentId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
         }

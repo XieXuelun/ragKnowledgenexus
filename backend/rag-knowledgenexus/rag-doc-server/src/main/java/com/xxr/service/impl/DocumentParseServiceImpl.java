@@ -217,10 +217,8 @@ public class DocumentParseServiceImpl implements DocumentParseService {
                 if (sentence.isEmpty()) {
                     continue;
                 }
-
                 // 追加到当前缓冲容器
                 buffer.append(sentence);
-
                 // 后置检查：追加后可能超限，需要拆解
                 while (buffer.length() > CHUNK_SIZE) {
                     // 从 CHUNK_SIZE 位置往回找最近的合法切分点
@@ -299,7 +297,6 @@ public class DocumentParseServiceImpl implements DocumentParseService {
         if (chunks.isEmpty()) {
             return;
         }
-
         Long docId = chunks.get(0).getDocId();
         //批量插入分片
         chunkService.saveBatch(chunks);

@@ -18,7 +18,6 @@ import com.xxr.qa.dto.QaAskDTO;
 import com.xxr.qa.pojo.QaConversation;
 import com.xxr.qa.pojo.QaMessage;
 import com.xxr.service.*;
-import com.xxr.utils.BaseContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -78,7 +77,7 @@ public class QaServiceImpl implements QaService {
         // 2. Qdrant 检索
         List<QdrantIndexService.SearchResult> searchResults = qdrantIndexService.search(kbId, queryVector, topK);
         if (searchResults.isEmpty()) {
-            QaMessage msg = saveMessage(conv.getId(), dto.getQuestion(), "未找到相关文档内容，无法回答该问题。", "[]", null, dto.getSearchType());
+            QaMessage msg = saveMessage(userId, conv.getId(), dto.getQuestion(), "未找到相关文档内容，无法回答该问题。", "[]", null, dto.getSearchType());
             return ResponseResult.okResult(Map.of("messageId", msg.getId(), "answer", msg.getAnswer(), "sources", List.of()));
         }
 
@@ -110,7 +109,8 @@ public class QaServiceImpl implements QaService {
         }
 
         // 6. 保存消息
-        QaMessage msg = saveMessage(conv.getId(), dto.getQuestion(), answer, JSON.toJSONString(sources), chatResult, dto.getSearchType());
+        QaMessage msg = saveMessage
+                (userId, conv.getId(), dto.getQuestion(), answer, JSON.toJSONString(sources), chatResult, dto.getSearchType());
 
         return ResponseResult.okResult(Map.of("messageId", msg.getId(), "answer", answer, "sources", sources));
     }
@@ -153,11 +153,11 @@ public class QaServiceImpl implements QaService {
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
 
-    private QaMessage saveMessage(Long conversationId, String question, String answer, String sourcesJson,
+    private QaMessage saveMessage(Long userId, Long conversationId, String question, String answer, String sourcesJson,
                                   ChatResult chatResult, String searchType) {
         QaMessage msg = new QaMessage();
         msg.setConversationId(conversationId);
-        msg.setUserId(BaseContext.getCurrentId());
+        msg.setUserId(userId);
         msg.setQuestion(question);
         msg.setAnswer(answer);
         msg.setSourceChunks(sourcesJson);

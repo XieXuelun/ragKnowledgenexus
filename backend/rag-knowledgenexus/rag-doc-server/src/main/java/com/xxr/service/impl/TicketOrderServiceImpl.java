@@ -6,10 +6,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xxr.common.dtos.PageResponseResult;
 import com.xxr.common.dtos.ResponseResult;
 import com.xxr.constant.DeleteConstants;
-import com.xxr.constant.UserRoleConstant;
 import com.xxr.constant.WorkOrderConstants;
 import com.xxr.mapper.TicketOrderMapper;
 import com.xxr.mapper.UserMapper;
+import com.xxr.service.PermissionService;
 import com.xxr.service.TicketOrderService;
 import com.xxr.ticket.dto.TicketCreateDTO;
 import com.xxr.ticket.dto.TicketResolveDTO;
@@ -32,6 +32,7 @@ public class TicketOrderServiceImpl implements TicketOrderService {
 
     private final TicketOrderMapper ticketMapper;
     private final UserMapper userMapper;
+    private final PermissionService permissionService;
 
     @Override
     public ResponseResult create(Long userId, TicketCreateDTO dto) {
@@ -59,8 +60,8 @@ public class TicketOrderServiceImpl implements TicketOrderService {
         if (user == null) {
             return ResponseResult.errorResult(400, "用户不存在");
         }
-        //如果用户角色为员工，查询自己的工单
-        if (user.getRole() == UserRoleConstant.EMPLOYEE) {
+        //普通员工只能查询自己的工单，管理员可以查询全部
+        if (!permissionService.isManager(userId)) {
             wrapper.eq(TicketOrder::getUserId, userId);
         }
         //管理员

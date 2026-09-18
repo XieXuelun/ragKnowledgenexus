@@ -10,18 +10,16 @@ import com.xxr.common.dtos.ResponseResult;
 import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.DeleteConstants;
 import com.xxr.constant.DocumentParseStatusConstants;
-import com.xxr.constant.UserRoleConstant;
 import com.xxr.document.dtos.DocumentQueryDto;
 import com.xxr.document.pojo.DocDocument;
 
 import com.xxr.document.vos.DocDocumentVO;
 import com.xxr.kb.pojo.DocKnowledgeBase;
 import com.xxr.mapper.DocumentMapper;
-import com.xxr.mapper.UserMapper;
 import com.xxr.service.DocumentParseService;
 import com.xxr.service.DocumentService;
-import com.xxr.user.pojo.User;
-import com.xxr.utils.BaseContext;
+import com.xxr.service.PermissionService;
+import com.xxr.utils.CurrentUserUtil;
 import com.xxr.utils.MinioUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -43,7 +41,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
     @Autowired
     private MinioUtil minioUtil;
     @Autowired
-    private UserMapper userMapper;
+    private CurrentUserUtil currentUserUtil;
+    @Autowired
+    private PermissionService permissionService;
     @Autowired
     private DocumentParseService documentParseService;
     /**
@@ -66,11 +66,11 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"分页参数非法");
         }
         //构建查询条件
-        Long userId = BaseContext.getCurrentId();
+        Long userId = currentUserUtil.getCurrentId();
         if(userId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"登录后再操作");
         }
-        boolean isAdmin=isAdmin(userId);
+        boolean isAdmin=permissionService.isManager(userId);
         Map<String,Object> map = new HashMap<>();
         map.put("kb_id",documentQueryDto.getKbId());
         map.put("userId",userId)  ;
@@ -86,18 +86,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         responseResult.setData(pageInfo.getRecords());
         return responseResult;
 
-    }
-
-    private boolean isAdmin(Long userId) {
-        User user = userMapper.selectById(userId);
-        if(user==null){
-            return false;
-        }
-        Integer role = user.getRole();
-        if(role==null){
-            return false;
-        }
-        return role!=UserRoleConstant.EMPLOYEE;
     }
 
     /**
@@ -120,7 +108,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         String documenturl = minioUtil.uploadDocument(file);
         //持久化存储
         DocDocument document = new DocDocument();
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND);
         }
@@ -130,7 +118,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         document.setTitle(fileName.substring(0, fileName.lastIndexOf(".")));
         document.setFileName(fileName);
         document.setKbId(kbId);
-        document.setMinioPath(documenturl);
+        document.setMinioPath(documenturl);//地址
         document.setCreateTime(LocalDateTime.now());
         document.setIsDeleted(DeleteConstants.NOT_DELETED);
         document.setParseStatus(DocumentParseStatusConstants.PENDING); // 0=待处理
@@ -208,7 +196,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"文档ID不能为空");
         }
         //校验登录用户是否为该文档的作者
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"请先登录后再操作");
         }
@@ -241,7 +229,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST,"文档不存在");
         }
         //校验登录用户是否为该文档的作者
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"请先登录后再操作");
         }
@@ -271,7 +259,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST,"文档不存在");
         }
         //检验登录用户是否为该文档的作者
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         Long uploadUserId = docDocument.getUploadUserId ();
         if(!(currentId.equals(uploadUserId))){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"您不是该文档的作者,无权限操作");
@@ -292,9 +280,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         if(kbId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         //查询文档
-        boolean admin = isAdmin(currentId);
+        boolean admin = permissionService.isManager(currentId);
         List<DocDocument> documents=documentMapper.selectbyKbId(kbId,admin,currentId);
         return ResponseResult.okResult(documents);
     }

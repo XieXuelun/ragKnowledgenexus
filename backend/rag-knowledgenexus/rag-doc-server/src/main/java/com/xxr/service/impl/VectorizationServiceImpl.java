@@ -82,7 +82,7 @@ public class VectorizationServiceImpl implements VectorizationService {
         chunkMapper.update(null, wrapper);
     }
 
-    private void markSuccess(List<DocChunk> batch, Map<Long, String> pointIdMap) {
+    /*private void markSuccess(List<DocChunk> batch, Map<Long, String> pointIdMap) {
         for (DocChunk c : batch) {
             String qdrantId = pointIdMap.get(c.getId());
             if (qdrantId != null) {
@@ -94,7 +94,37 @@ public class VectorizationServiceImpl implements VectorizationService {
                 chunkMapper.updateById(c);
             }
         }
+    }*/
+    private void markSuccess(List<DocChunk> batch, Map<Long, String> pointIdMap) {
+        // 拆分成功、失败id
+        List<Long> successIds = new ArrayList<>();
+        List<Long> failIds = new ArrayList<>();
+        for (DocChunk chunk : batch) {
+            if (pointIdMap.containsKey(chunk.getId())) {
+                successIds.add(chunk.getId());
+            } else {
+                failIds.add(chunk.getId());
+            }
+        }
+
+        // 失败的，直接复用markFailed逻辑，批量更新
+        if (!failIds.isEmpty()) {
+            LambdaUpdateWrapper<DocChunk> failWrapper = new LambdaUpdateWrapper<>();
+            failWrapper.set(DocChunk::getEmbedStatus, EmbedStatusEnum.FAILED.getCode())
+                    .in(DocChunk::getId, failIds);
+            chunkMapper.update(null, failWrapper);
+        }
+
+        // 成功的：vectorId每条值不同，MybatisPlus普通wrapper做不到一条SQL设置不同值，使用批量循环或者mybatis‑plus批量
+        for (Long id : successIds) {
+            LambdaUpdateWrapper<DocChunk> successWrapper = new LambdaUpdateWrapper<>();
+            successWrapper.set(DocChunk::getEmbedStatus, EmbedStatusEnum.SUCCESS.getCode())
+                    .set(DocChunk::getVectorId, pointIdMap.get(id))
+                    .eq(DocChunk::getId, id);
+            chunkMapper.update(null, successWrapper);
+        }
     }
+
 
     private List<DocChunk> selectPending(Long docId) {
         return chunkMapper.selectList(new LambdaQueryWrapper<DocChunk>()

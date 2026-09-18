@@ -11,7 +11,6 @@ import com.xxr.common.dtos.PageResponseResult;
 import com.xxr.common.dtos.ResponseResult;
 import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.DeleteConstants;
-import com.xxr.constant.UserRoleConstant;
 import com.xxr.enums.VisibleScopeEnum;
 import com.xxr.kb.dtos.DocImportDTO;
 import com.xxr.kb.dtos.KnowledgeBaseQueryDTO;
@@ -23,8 +22,9 @@ import com.xxr.mapper.KnowledgeMapper;
 import com.xxr.mapper.UserMapper;
 import com.xxr.service.KbFavoriteService;
 import com.xxr.service.KnowledgeService;
+import com.xxr.service.PermissionService;
 import com.xxr.user.pojo.User;
-import com.xxr.utils.BaseContext;
+import com.xxr.utils.CurrentUserUtil;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,6 +44,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
     private KnowledgeMapper knowledgeMapper;
     @Autowired
     private KbFavoriteService kbFavoriteService;
+    @Autowired
+    private CurrentUserUtil currentUserUtil;
+    @Autowired
+    private PermissionService permissionService;
 
 
 
@@ -68,10 +72,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         // 3.封装查询参数
         Map<String, Object> params = new HashMap<>();
         params.put("keyword", knowledgeBaseQueryDTO.getKeyword());
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         params.put("currentId", currentId);
         // 判断是否为管理员（未登录时视为普通用户，但允许查看公开知识库）
-        boolean admin = isAdmin(currentId);
+        boolean admin = permissionService.isManager(currentId);
         params.put("isAdmin", admin);
         // 如果用户未登录，只查询公开知识库
         if (currentId == null) {
@@ -86,22 +90,6 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         responseResult.setData(pageInfo.getRecords());
         return responseResult;
     }
-
-    private boolean isAdmin(Long currentId) {
-        if (currentId == null) {
-            return false;
-        }
-        User user = userMapper.selectById(currentId);
-        if(user==null){
-            return false;
-        }
-        Integer role = user.getRole();
-        if(role==null){
-            return false;
-        }
-        return role != UserRoleConstant.EMPLOYEE;
-    }
-
 
     /**
      * c查询知识库详情
@@ -132,12 +120,13 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         if(knowledgeBaseRequest==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
         String name = knowledgeBaseRequest.getName();
-        Long count = knowledgeMapper.selectCount(new LambdaQueryWrapper<DocKnowledgeBase>().eq(DocKnowledgeBase::getName, name));
+        Long count = knowledgeMapper.selectCount
+                (new LambdaQueryWrapper<DocKnowledgeBase>().eq(DocKnowledgeBase::getName, name));
         if(count>0){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"知识库名称已存在");
         }
@@ -171,7 +160,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
         //检查用户id
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
@@ -199,7 +188,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
         //检查登录状态
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
@@ -243,7 +232,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "知识库ID不能为空");
         }
 
-        Long currentId = BaseContext.getCurrentId();
+        Long currentId = currentUserUtil.getCurrentId();
         if (currentId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
         }

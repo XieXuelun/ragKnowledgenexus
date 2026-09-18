@@ -5,13 +5,12 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xxr.common.dtos.ResponseResult;
 import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.DeleteConstants;
-import com.xxr.constant.UserRoleConstant;
 import com.xxr.dept.dtos.DepartmentTreeDTO;
 import com.xxr.dept.pojo.Department;
 import com.xxr.mapper.DepartmentMapper;
 import com.xxr.mapper.UserMapper;
 import com.xxr.service.DepartmentService;
-import com.xxr.utils.BaseContext;
+import com.xxr.service.PermissionService;
 import com.xxr.user.pojo.User;
 import com.xxr.user.vos.UserListItemVO;
 import org.springframework.beans.BeanUtils;
@@ -28,6 +27,8 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
 
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private PermissionService permissionService;
 
 
     /**
@@ -198,32 +199,12 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     }
 
     /**
-     * 校验当前用户是否为管理员
-     * @return 校验结果
-     */
-    private ResponseResult checkAdminPermission() {
-        Long currentId = BaseContext.getCurrentId();
-        if (currentId == null) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
-        }
-        User user = userMapper.selectById(currentId);
-        if (user == null || user.getStatus() == 0) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "用户不存在或已被禁用");
-        }
-        // 0=超管 1=管理员 2=普通员工，只有超管和管理员才能操作
-        if (user.getRole() == null || user.getRole() > UserRoleConstant.KB_ADMIN) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "只有管理员才能进行此操作");
-        }
-        return null;
-    }
-
-    /**
      * 创建部门
      */
     @Override
     public ResponseResult create(Department department) {
         // 校验管理员权限
-        ResponseResult checkResult = checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }
@@ -245,7 +226,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     @Override
     public ResponseResult update(Department department) {
         // 校验管理员权限
-        ResponseResult checkResult = checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }
@@ -267,7 +248,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     @Override
     public ResponseResult delete(Long id) {
         // 校验管理员权限
-        ResponseResult checkResult = checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }

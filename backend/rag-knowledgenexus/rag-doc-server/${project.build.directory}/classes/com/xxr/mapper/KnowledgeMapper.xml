@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xxr.mapper.KnowledgeMapper">
+
+    <select id="selectKnowledgeBaseList" resultType="com.xxr.kb.pojo.DocKnowledgeBase">
+        SELECT kb.*,count(d.id) as docCount
+        FROM doc_knowledge_base kb
+        left join doc_document d on kb.id=d.kb_id and d.is_deleted=0
+        <where>
+            kb.is_deleted=0
+            <!-- 关键词搜索 -->
+            <if test="params.keyword != null and params.keyword != ''">
+                AND kb.name LIKE CONCAT('%', #{params.keyword}, '%')
+            </if>
+
+            <!-- 用户未登录，只显示公开知识库 -->
+            <if test="params.onlyPublic != null and params.onlyPublic">
+                AND kb.visibility = 2
+            </if>
+
+            <!-- 非管理员权限控制（已登录用户） -->
+            <if test="!params.isAdmin and params.onlyPublic == null">
+                AND(
+                <!-- 自己创建 OR 公开 -->
+                (kb.owner_id = #{params.currentId} )
+                OR (kb.visibility = 2)
+                OR
+                <!-- 部门公开 + 同部门 -->
+                (kb.visibility = 1
+                AND kb.dept_id IN (SELECT dept_id FROM sys_user WHERE id = #{params.currentId}))
+                )
+            </if>
+        </where>
+        GROUP BY kb.id
+        ORDER BY kb.create_time DESC
+    </select>
+
+    <select id="selectAccessibleKbIds" resultType="long">
+        SELECT kb.id FROM doc_knowledge_base kb
+        WHERE kb.is_deleted = 0
+          AND (
+              kb.owner_id = #{userId}
+              OR kb.visibility = 2
+              OR (kb.visibility = 1 AND kb.dept_id IN (SELECT dept_id FROM sys_user WHERE id = #{userId}))
+          )
+        ORDER BY kb.id
+    </select>
+
+</mapper>
