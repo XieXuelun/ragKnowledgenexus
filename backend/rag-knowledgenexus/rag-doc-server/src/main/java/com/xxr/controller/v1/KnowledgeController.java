@@ -7,6 +7,7 @@ import com.xxr.service.KnowledgeService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -45,6 +46,7 @@ public class KnowledgeController {
      */
     @PostMapping("/create")
     @ApiOperation(value = "创建个人知识库")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'KB_ADMIN')")
     public ResponseResult createKnowledge(@RequestBody KnowledgeBaseRequest knowledgeBaseRequest){
         return knowledgeService.createKnowledge(knowledgeBaseRequest);
     }
@@ -56,6 +58,7 @@ public class KnowledgeController {
      */
     @PostMapping("/update")
     @ApiOperation("修改知识库内容")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'KB_ADMIN')")
     public ResponseResult updateKnowledge(@RequestBody KnowledgeBaseRequest knowledgeBaseRequest){
         return knowledgeService.updateKnowledge(knowledgeBaseRequest);
     }
@@ -78,6 +81,7 @@ public class KnowledgeController {
      */
     @DeleteMapping("/{kbId}")
     @ApiOperation(value = "删除自有知识库")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'KB_ADMIN')")
     public ResponseResult delete(@PathVariable Long kbId){
         return knowledgeService.deleteKnowledge(kbId);
     }

@@ -129,6 +129,7 @@ async function handleChangePassword() {
   try {
     await updateUser({
       id: userStore.userInfo?.id,
+      oldPassword: passwordForm.oldPassword,
       password: passwordForm.newPassword,
     });
     ElMessage.success("密码修改成功");

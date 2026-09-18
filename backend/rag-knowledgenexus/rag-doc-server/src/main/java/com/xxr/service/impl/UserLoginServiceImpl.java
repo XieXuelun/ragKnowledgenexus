@@ -9,19 +9,18 @@ import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.DeleteConstants;
 import com.xxr.constant.UserRoleConstant;
 import com.xxr.mapper.AuthMapper;
-import com.xxr.service.PermissionService;
 import com.xxr.service.UserLoginService;
+import com.xxr.security.SecurityUtils;
 import com.xxr.user.dtos.UserUpdateRequest;
 import com.xxr.user.pojo.User;
-import com.xxr.utils.CurrentUserUtil;
 import com.xxr.utils.JwtUtil;
 import com.xxr.utils.MinioUtil;
 import io.jsonwebtoken.Claims;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,22 +31,15 @@ import java.util.Map;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implements UserLoginService {
 
     private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
-    private static final int USERNAME_MIN_LENGTH = 4;
-    private static final int USERNAME_MAX_LENGTH = 50;
     private static final int PASSWORD_MIN_LENGTH = 6;
     private static final int PASSWORD_MAX_LENGTH = 100;
 
-    @Autowired
-    private AuthMapper authMapper;
-    @Autowired
-    private MinioUtil minioUtil;
-    @Autowired
-    private CurrentUserUtil currentUserUtil;
-    @Autowired
-    private PermissionService permissionService;
+    private final AuthMapper authMapper;
+    private final MinioUtil minioUtil;
 
     /**
      * 用户登录
@@ -115,13 +107,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户名或密码不能为空");
         }
 
-        // 2. 角色合法性校验（放在数据库操作前）
-        Integer role = userRegisterDTO.getRole();
-        if (role == null || !role.equals(UserRoleConstant.EMPLOYEE)) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "只能注册为普通员工");
-        }
-
-        // 3. 用户名查重
+        // 2. 用户名查重
         String username = userRegisterDTO.getUsername();
         int count = Math.toIntExact(authMapper.selectCount(
                 Wrappers.<User>lambdaQuery().eq(User::getUsername, username)));
@@ -129,7 +115,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_EXIST, "用户名已存在");
         }
 
-        // 4. 组装用户（只使用白名单字段）
+        // 3. 组装用户，公开注册始终为普通员工
         User user = new User();
         user.setUsername(username);
         user.setPassword(PASSWORD_ENCODER.encode(userRegisterDTO.getPassword()));
@@ -138,7 +124,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
         user.setStatus(1);
         user.setIsDeleted(DeleteConstants.NOT_DELETED);
         user.setCreateTime(LocalDateTime.now());
-        save(user);
+        authMapper.insert(user);
         log.info("用户注册成功: {}", username);
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
@@ -184,7 +170,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult logout() {
-        currentUserUtil.clearCurrentId();
+        SecurityContextHolder.clearContext();
         return ResponseResult.okResult("登出成功");
     }
     /**
@@ -193,8 +179,7 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult<User> getUserInfo() {
-        //获取当前用户id
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         //校验参数
         if (currentId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
@@ -226,32 +211,40 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult updateUser(UserUpdateRequest userUpdateRequest) {
-        // 1. 基础参数校验
-        if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
+        if (userUpdateRequest == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "无效参数");
         }
 
-        // 2. 查询目标用户
-        User targetUser = getById(userUpdateRequest.getId());
+        Long currentId = SecurityUtils.getCurrentUserId();
+        if (currentId == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
+        }
+        if (userUpdateRequest.getId() != null && !currentId.equals(userUpdateRequest.getId())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "只能修改自己的信息");
+        }
+
+        User targetUser = authMapper.selectById(currentId);
         if (targetUser == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "用户不存在");
         }
 
-        // 3. 权限校验（用 equals 替代 !=）
-        Long currentId = currentUserUtil.getCurrentId();
-        boolean isSelf = targetUser.getId().equals(currentId);
-        if (!isSelf && !permissionService.isManager()) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权修改他人信息");
-        }
-
-        // 4. 只允许修改白名单字段，禁止提权
         User user = new User();
-        user.setId(userUpdateRequest.getId());
+        user.setId(currentId);
         user.setNickname(userUpdateRequest.getNickname());
         user.setEmail(userUpdateRequest.getEmail());
+        if (StringUtils.hasText(userUpdateRequest.getPassword())) {
+            if (!StringUtils.hasText(userUpdateRequest.getOldPassword())
+                    || !PASSWORD_ENCODER.matches(userUpdateRequest.getOldPassword(), targetUser.getPassword())) {
+                return ResponseResult.errorResult(AppHttpCodeEnum.LOGIN_PASSWORD_ERROR, "原密码错误");
+            }
+            if (userUpdateRequest.getPassword().length() < PASSWORD_MIN_LENGTH
+                    || userUpdateRequest.getPassword().length() > PASSWORD_MAX_LENGTH) {
+                return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "密码长度必须为6-100个字符");
+            }
+            user.setPassword(PASSWORD_ENCODER.encode(userUpdateRequest.getPassword()));
+        }
         user.setUpdateTime(LocalDateTime.now());
-        // 注意：不要 setRole / setStatus / setPassword
-        updateById(user);
+        authMapper.updateById(user);
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
     /**
@@ -262,22 +255,21 @@ public class UserLoginServiceImpl extends ServiceImpl<AuthMapper, User> implemen
      */
     @Override
     public ResponseResult uploadAvatar(MultipartFile file) throws Exception {
+        Long currentId = SecurityUtils.getCurrentUserId();
+        if (currentId == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
+        }
         // 检查文件是否为空
         if (file.isEmpty()) {
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "上传的文件不能为空");
         }
         String avatar = minioUtil.uploadAvatar(file);
-        //获取当前用户id
-        Long currentId = currentUserUtil.getCurrentId();
-        if (currentId == null) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
-        }
         //更新用户信息
         User user=new User();
         user.setId(currentId);
         user.setAvatarUrl(avatar);
         user.setUpdateTime(LocalDateTime.now());
-        updateById(user);
+        authMapper.updateById(user);
         // Return presigned URL for browser access
         String presignedUrl = minioUtil.getPresignedAvatarUrl(avatar, 86400);
         return ResponseResult.okResult(presignedUrl);

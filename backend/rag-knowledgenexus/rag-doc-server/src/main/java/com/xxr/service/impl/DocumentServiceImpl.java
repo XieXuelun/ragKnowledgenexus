@@ -16,10 +16,10 @@ import com.xxr.document.pojo.DocDocument;
 import com.xxr.document.vos.DocDocumentVO;
 import com.xxr.kb.pojo.DocKnowledgeBase;
 import com.xxr.mapper.DocumentMapper;
+import com.xxr.security.SecurityUtils;
 import com.xxr.service.DocumentParseService;
 import com.xxr.service.DocumentService;
 import com.xxr.service.PermissionService;
-import com.xxr.utils.CurrentUserUtil;
 import com.xxr.utils.MinioUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -40,8 +40,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
     private DocumentMapper documentMapper;
     @Autowired
     private MinioUtil minioUtil;
-    @Autowired
-    private CurrentUserUtil currentUserUtil;
     @Autowired
     private PermissionService permissionService;
     @Autowired
@@ -66,11 +64,13 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"分页参数非法");
         }
         //构建查询条件
-        Long userId = currentUserUtil.getCurrentId();
+        Long userId = SecurityUtils.getCurrentUserId();
         if(userId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"登录后再操作");
         }
-        boolean isAdmin=permissionService.isManager(userId);
+        boolean isAdmin = documentQueryDto.getKbId() != null
+                ? permissionService.canManageKnowledgeBase(documentQueryDto.getKbId())
+                : permissionService.isSuperAdmin();
         Map<String,Object> map = new HashMap<>();
         map.put("kb_id",documentQueryDto.getKbId());
         map.put("userId",userId)  ;
@@ -96,22 +96,27 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
      */
     @Override
     public ResponseResult uploadDocument(MultipartFile file, Long kbId) throws Exception {
-        //校验参数
-        if(file==null){
+        if (file == null || kbId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
+        }
+        Long currentId = SecurityUtils.getCurrentUserId();
+        if (currentId == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录后再操作");
+        }
+        if (!permissionService.canManageKnowledgeBase(kbId)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权管理该知识库");
         }
         long size = file.getSize();
         String fileName=file.getOriginalFilename();
+        if (!org.springframework.util.StringUtils.hasText(fileName) || !fileName.contains(".")) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "文件名非法");
+        }
         //获取扩展名
         String fileType = fileName.substring(fileName.lastIndexOf(".")+1);
         //上传文档
         String documenturl = minioUtil.uploadDocument(file);
         //持久化存储
         DocDocument document = new DocDocument();
-        Long currentId = currentUserUtil.getCurrentId();
-        if(currentId==null){
-            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND);
-        }
         document.setUploadUserId(currentId);
         document.setFileSize(size);
         document.setFileType(fileType);
@@ -129,7 +134,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         // 上传完成后异步调用文档解析
         log.info("文档上传成功，开始异步解析: docId={}, fileName={}", document.getId(), fileName);
         documentParseService.parseDocumentAsync(document);
-        
         return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
 
@@ -145,6 +149,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
         DocDocument docDocument = getById(id);
+        if (docDocument == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "文档不存在");
+        }
+        if (!permissionService.canViewKnowledgeBase(docDocument.getKbId())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该文档");
+        }
         ResponseResult responseResult = new ResponseResult();
         responseResult.setData(docDocument);
         return responseResult;
@@ -169,6 +179,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         DocDocument docDocument = getById(docId);
         if(docDocument==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"文档不存在");
+        }
+        if (!permissionService.canViewKnowledgeBase(docDocument.getKbId())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该文档");
         }
         // 生成预签名URL
         String previewUrl = minioUtil.getPresignedUrl(docDocument.getMinioPath(), expireSeconds);
@@ -196,7 +209,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"文档ID不能为空");
         }
         //校验登录用户是否为该文档的作者
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"请先登录后再操作");
         }
@@ -205,7 +218,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST,"文档不存在");
         }
         log.info("当前登录ID:{}",currentId);
-        if(!(currentId.equals(docDocument.getUploadUserId()))){
+        if(!currentId.equals(docDocument.getUploadUserId())
+                && !permissionService.canManageKnowledgeBase(docDocument.getKbId())){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"您不是该文档的作者,无权限操作");
         }
         docDocument.setFileName(fileName);
@@ -229,11 +243,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST,"文档不存在");
         }
         //校验登录用户是否为该文档的作者
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_ADMIND,"请先登录后再操作");
         }
-        if(!(currentId.equals(docDocument.getUploadUserId()))){
+        if(!currentId.equals(docDocument.getUploadUserId())
+                && !permissionService.canManageKnowledgeBase(docDocument.getKbId())){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"您不是该文档的作者,无权限操作");
         }
         docDocument.setIsDeleted(DeleteConstants.DELETED);
@@ -259,9 +274,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
             return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST,"文档不存在");
         }
         //检验登录用户是否为该文档的作者
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         Long uploadUserId = docDocument.getUploadUserId ();
-        if(!(currentId.equals(uploadUserId))){
+        if(!currentId.equals(uploadUserId)
+                && !permissionService.canManageKnowledgeBase(docDocument.getKbId())){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"您不是该文档的作者,无权限操作");
         }
         //异步调用文档解析服务重新解析
@@ -280,9 +296,15 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, DocDocument
         if(kbId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
+        if (currentId == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
+        }
+        if (!permissionService.canViewKnowledgeBase(kbId)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该知识库");
+        }
         //查询文档
-        boolean admin = permissionService.isManager(currentId);
+        boolean admin = permissionService.canManageKnowledgeBase(kbId);
         List<DocDocument> documents=documentMapper.selectbyKbId(kbId,admin,currentId);
         return ResponseResult.okResult(documents);
     }

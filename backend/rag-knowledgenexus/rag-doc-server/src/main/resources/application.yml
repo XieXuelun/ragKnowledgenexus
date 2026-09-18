@@ -14,6 +14,18 @@ spring:
     url: jdbc:mysql://mysql-prod:3306/rag_knowledge_base?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&allowMultiQueries=true
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  redis:
+    host: ${REDIS_HOST:redis-prod}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 5000ms
   jackson:
     generator:
       write_numbers_as_strings: true

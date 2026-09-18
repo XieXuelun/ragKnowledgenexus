@@ -141,10 +141,7 @@ onMounted(fetchData);
         <el-form-item label="姓名"><el-input v-model="form.realName" placeholder="真实姓名" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="form.email" placeholder="邮箱地址" /></el-form-item>
         <el-form-item label="角色">
-          <el-radio-group v-model="form.role">
-            <el-radio :value="1">知识库管理员</el-radio>
-            <el-radio :value="2">普通员工</el-radio>
-          </el-radio-group>
+          <el-tag type="info">普通员工</el-tag>
         </el-form-item>
       </el-form>
       <template #footer>

@@ -37,6 +37,7 @@ public class QaServiceImpl implements QaService {
     private final EmbeddingService embeddingService;
     private final QdrantIndexService qdrantIndexService;
     private final ChatService chatService;
+    private final PermissionService permissionService;
 
     private static final String SYSTEM_PROMPT = """
             你是一个专业的知识库问答助手。请根据提供的文档内容回答用户的问题。
@@ -49,6 +50,12 @@ public class QaServiceImpl implements QaService {
 
     @Override
     public ResponseResult createConversation(Long userId, ConversationCreateDTO dto) {
+        if (userId == null || dto == null || dto.getKbId() == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
+        }
+        if (!permissionService.canViewKnowledgeBase(dto.getKbId())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该知识库");
+        }
         QaConversation conv = new QaConversation();
         conv.setUserId(userId);
         conv.setKbId(dto.getKbId());
@@ -62,10 +69,13 @@ public class QaServiceImpl implements QaService {
     @Override
     public ResponseResult ask(Long userId, QaAskDTO dto) {
         QaConversation conv = conversationMapper.selectById(dto.getConversationId());
-        if (conv == null) {
+        if (conv == null || !userId.equals(conv.getUserId())) {
             return ResponseResult.errorResult(400, "对话不存在");
         }
         Long kbId = conv.getKbId();
+        if (!permissionService.canViewKnowledgeBase(kbId)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该知识库");
+        }
         int topK = dto.getTopK() != null ? dto.getTopK() : 5;
 
         // 1. 问题向量化
@@ -144,7 +154,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public ResponseResult feedback(Long userId, Long messageId, int score) {
         QaMessage msg = messageMapper.selectById(messageId);
-        if (msg == null) {
+        if (msg == null || !userId.equals(msg.getUserId())) {
             return ResponseResult.errorResult(400, "消息不存在");
         }
         msg.setQualityScore(score);

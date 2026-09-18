@@ -18,7 +18,7 @@ public class StatController {
 
     @GetMapping("/daily")
     @ApiOperation("获取每日统计概览")
-    @PreAuthorize("hasRole('ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult getDailyStats(@RequestParam(required = false) String startDate,
                                         @RequestParam(required = false) String endDate) {
         return statService.getDailyStats(startDate, endDate);
@@ -26,7 +26,7 @@ public class StatController {
 
     @GetMapping("/hot-questions")
     @ApiOperation("获取热门问题 Top-N")
-    @PreAuthorize("hasRole('ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult getHotQuestions(@RequestParam(required = false) Long kbId,
                                           @RequestParam(defaultValue = "20") Integer topN) {
         return statService.getHotQuestions(kbId, topN);

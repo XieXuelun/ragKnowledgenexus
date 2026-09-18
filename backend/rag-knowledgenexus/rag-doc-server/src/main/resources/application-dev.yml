@@ -27,6 +27,19 @@ spring:
       max-lifetime: 1800000
       connection-timeout: 30000
 
+  redis:
+    host: 192.168.150.101
+    port: 6379
+    password: redis123
+    database: 0
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 5000ms
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

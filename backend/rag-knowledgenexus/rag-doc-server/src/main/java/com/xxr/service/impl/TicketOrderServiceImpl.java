@@ -104,6 +104,10 @@ public class TicketOrderServiceImpl implements TicketOrderService {
         if (order == null) {
             return ResponseResult.errorResult(400, "工单不存在");
         }
+        if (!permissionService.isSuperAdmin()
+                && !permissionService.canManageKnowledgeBase(order.getKbId())) {
+            return ResponseResult.errorResult(400, "无权处理该知识库的工单");
+        }
         if (order.getStatus() == WorkOrderConstants.STATUS_RESOLVED ||
             order.getStatus() == WorkOrderConstants.STATUS_CLOSED) {
             return ResponseResult.errorResult(400, "工单已结束，无法重复处理");

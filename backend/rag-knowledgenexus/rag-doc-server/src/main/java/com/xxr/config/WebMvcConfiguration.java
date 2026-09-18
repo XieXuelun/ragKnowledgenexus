@@ -2,7 +2,6 @@ package com.xxr.config;
 
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import com.xxr.interceptor.JwtTokenInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -10,16 +9,13 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.CacheControl;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport;
 import springfox.documentation.builders.ApiInfoBuilder;
@@ -43,31 +39,6 @@ import java.util.List;
 @Slf4j
 public class WebMvcConfiguration extends WebMvcConfigurationSupport {
 
-    @Autowired
-    private JwtTokenInterceptor jwtTokenInterceptor;
-
-    /**
-     * 注册自定义拦截器
-     *
-     * @param registry
-     */
-    @Override
-    protected void addInterceptors(InterceptorRegistry registry) {
-        log.info("正在注册自定义拦截器...");
-        
-        // 添加JWT拦截器，针对需要认证的API路径
-        registry.addInterceptor(jwtTokenInterceptor)
-                .addPathPatterns("/api/v1/**")  // 对所有API进行拦截
-                .excludePathPatterns("/api/v1/user/login")  // 登录接口不拦截
-                .excludePathPatterns("/api/v1/user/register") // 注册接口不拦截
-                .excludePathPatterns("/api/v1/user/refresh")  // 刷新Token接口不拦截
-                .excludePathPatterns("/api/v1/user/logout") // 登出接口不拦截
-                .excludePathPatterns("/swagger-ui.html")    // swagger不拦截
-                .excludePathPatterns("/webjars/**")         // swagger资源不拦截
-                .excludePathPatterns("/v3/api-docs/**")     // openapi不拦截
-                .excludePathPatterns("/doc.html")           // 文档不拦截
-                .excludePathPatterns("/api/v1/**/public/**"); // 公共访问接口不拦截
-    }
     /**
      * 通过knife4j生成接口文档
      * @return

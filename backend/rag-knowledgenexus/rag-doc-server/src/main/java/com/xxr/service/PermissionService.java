@@ -3,9 +3,11 @@ package com.xxr.service;
 import com.xxr.common.dtos.ResponseResult;
 import com.xxr.common.enums.AppHttpCodeEnum;
 import com.xxr.constant.UserRoleConstant;
+import com.xxr.kb.pojo.DocKnowledgeBase;
+import com.xxr.mapper.KnowledgeMapper;
 import com.xxr.mapper.UserMapper;
+import com.xxr.security.SecurityUtils;
 import com.xxr.user.pojo.User;
-import com.xxr.utils.CurrentUserUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,54 +16,121 @@ import org.springframework.stereotype.Service;
 public class PermissionService {
 
     private final UserMapper userMapper;
-    private final CurrentUserUtil currentUserUtil;
+    private final KnowledgeMapper knowledgeMapper;
 
     public boolean isManager() {
-        return isManager(currentUserUtil.getCurrentId());
+        return isManager(SecurityUtils.getCurrentUserId());
     }
 
     public boolean isManager(Long userId) {
-        //判断用户是否存在且状态为正常
         User user = findActiveUser(userId);
-        //不为空且有管理员角色
-        return user!=null&&!hasManagerRole(user);
+        return user != null && hasManagerRole(user);
     }
-    //检查用户是否有管理员权限
+
+    public boolean isSuperAdmin() {
+        User user = findActiveUser(SecurityUtils.getCurrentUserId());
+        return user != null && Integer.valueOf(UserRoleConstant.SUPER_ADMIN).equals(user.getRole());
+    }
+
+    public boolean isKbAdmin() {
+        User user = findActiveUser(SecurityUtils.getCurrentUserId());
+        return user != null && Integer.valueOf(UserRoleConstant.KB_ADMIN).equals(user.getRole());
+    }
+
     public ResponseResult checkAdminPermission() {
-        //获取用户id
-        Long userId = currentUserUtil.getCurrentId();
-        //判断是否登录
+        Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户未登录");
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "用户未登录");
         }
-        //判断用户是否存在且状态为正常
         User user = findActiveUser(userId);
-        if(user==null){
-            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户不存在");
+        if (user == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "用户不存在");
         }
-        //判断用户是否有管理员角色
-        if(!hasManagerRole(user)){
-            return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "用户不是管理员");
+        if (!hasManagerRole(user)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "用户不是管理员");
         }
         return null;
-       }
-    //查找用户是否存在且状态为正常
+    }
+
+    public ResponseResult checkSuperAdminPermission() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "用户未登录");
+        }
+        User user = findActiveUser(userId);
+        if (user == null) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.DATA_NOT_EXIST, "用户不存在");
+        }
+        if (!Integer.valueOf(UserRoleConstant.SUPER_ADMIN).equals(user.getRole())) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "仅超级管理员可操作");
+        }
+        return null;
+    }
+
+    public boolean canManageKnowledgeBase(Long kbId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        User user = findActiveUser(userId);
+        if (user == null || kbId == null) {
+            return false;
+        }
+        if (Integer.valueOf(UserRoleConstant.SUPER_ADMIN).equals(user.getRole())) {
+            return true;
+        }
+        if (!Integer.valueOf(UserRoleConstant.KB_ADMIN).equals(user.getRole())) {
+            return false;
+        }
+        DocKnowledgeBase knowledgeBase = findActiveKnowledgeBase(kbId);
+        return knowledgeBase != null && userId.equals(knowledgeBase.getOwnerId());
+    }
+
+    public boolean canViewKnowledgeBase(Long kbId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        User user = findActiveUser(userId);
+        if (user == null || kbId == null) {
+            return false;
+        }
+        if (Integer.valueOf(UserRoleConstant.SUPER_ADMIN).equals(user.getRole())) {
+            return true;
+        }
+        DocKnowledgeBase knowledgeBase = findActiveKnowledgeBase(kbId);
+        if (knowledgeBase == null) {
+            return false;
+        }
+        if (userId.equals(knowledgeBase.getOwnerId())) {
+            return true;
+        }
+        if (Integer.valueOf(2).equals(knowledgeBase.getVisibility())) {
+            return true;
+        }
+        return Integer.valueOf(1).equals(knowledgeBase.getVisibility())
+                && user.getDeptId() != null
+                && user.getDeptId().equals(knowledgeBase.getDeptId());
+    }
+
     private User findActiveUser(Long userId) {
-        //判断用户id是否为空
         if (userId == null) {
             return null;
         }
-        //根据用户id查询用户信息
         User user = userMapper.selectById(userId);
-        //判断用户是否存在且状态为正常
-        if(user==null||Integer.valueOf(0).equals(user.getStatus())){
+        if (user == null
+                || Integer.valueOf(0).equals(user.getStatus())
+                || Integer.valueOf(1).equals(user.getIsDeleted())) {
             return null;
         }
         return user;
     }
-    //判断用户是否有管理员角色
+
+    private DocKnowledgeBase findActiveKnowledgeBase(Long kbId) {
+        DocKnowledgeBase knowledgeBase = knowledgeMapper.selectById(kbId);
+        if (knowledgeBase == null || Integer.valueOf(1).equals(knowledgeBase.getIsDeleted())) {
+            return null;
+        }
+        return knowledgeBase;
+    }
+
     private boolean hasManagerRole(User user) {
         Integer role = user.getRole();
-        return role != null && (role == UserRoleConstant.SUPER_ADMIN || role == UserRoleConstant.KB_ADMIN);
+        return Integer.valueOf(UserRoleConstant.SUPER_ADMIN).equals(role)
+                || Integer.valueOf(UserRoleConstant.KB_ADMIN).equals(role);
     }
 }

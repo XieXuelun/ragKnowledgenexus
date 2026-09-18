@@ -204,7 +204,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     @Override
     public ResponseResult create(Department department) {
         // 校验管理员权限
-        ResponseResult checkResult = permissionService.checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkSuperAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }
@@ -226,7 +226,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     @Override
     public ResponseResult update(Department department) {
         // 校验管理员权限
-        ResponseResult checkResult = permissionService.checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkSuperAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }
@@ -248,7 +248,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     @Override
     public ResponseResult delete(Long id) {
         // 校验管理员权限
-        ResponseResult checkResult = permissionService.checkAdminPermission();
+        ResponseResult checkResult = permissionService.checkSuperAdminPermission();
         if (checkResult != null) {
             return checkResult;
         }

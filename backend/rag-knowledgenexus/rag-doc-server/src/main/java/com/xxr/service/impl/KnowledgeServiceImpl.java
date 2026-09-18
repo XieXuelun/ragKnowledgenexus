@@ -20,11 +20,11 @@ import com.xxr.kb.pojo.KbFavorite;
 import com.xxr.mapper.KbFavoriteMapper;
 import com.xxr.mapper.KnowledgeMapper;
 import com.xxr.mapper.UserMapper;
+import com.xxr.security.SecurityUtils;
 import com.xxr.service.KbFavoriteService;
 import com.xxr.service.KnowledgeService;
 import com.xxr.service.PermissionService;
 import com.xxr.user.pojo.User;
-import com.xxr.utils.CurrentUserUtil;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,8 +44,6 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
     private KnowledgeMapper knowledgeMapper;
     @Autowired
     private KbFavoriteService kbFavoriteService;
-    @Autowired
-    private CurrentUserUtil currentUserUtil;
     @Autowired
     private PermissionService permissionService;
 
@@ -72,10 +70,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         // 3.封装查询参数
         Map<String, Object> params = new HashMap<>();
         params.put("keyword", knowledgeBaseQueryDTO.getKeyword());
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         params.put("currentId", currentId);
-        // 判断是否为管理员（未登录时视为普通用户，但允许查看公开知识库）
-        boolean admin = permissionService.isManager(currentId);
+        // 仅超级管理员跳过可见范围过滤；KB 管理员仍按资源归属和可见范围查询。
+        boolean admin = permissionService.isSuperAdmin();
         params.put("isAdmin", admin);
         // 如果用户未登录，只查询公开知识库
         if (currentId == null) {
@@ -102,6 +100,9 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         if(id==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"请求数据为空");
         }
+        if (!permissionService.canViewKnowledgeBase(id)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权访问该知识库");
+        }
         DocKnowledgeBase knowledgeBase = getById(id);
         ResponseResult responseResult = new ResponseResult();
         responseResult.setData(knowledgeBase);
@@ -120,7 +121,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         if(knowledgeBaseRequest==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
@@ -160,7 +161,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
         //检查用户id
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
@@ -169,8 +170,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         if(knowledgeBase==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID,"知识库不存在");
         }
-        //检查知识库是否属于当前用户
-        if(!(knowledgeBase.getOwnerId().equals(currentId))){
+        if (!permissionService.canManageKnowledgeBase(knowledgeBase.getId())) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH,"无法更改不属于您的知识库");
         }
         //更新知识库信息
@@ -188,7 +188,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID);
         }
         //检查登录状态
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if(currentId==null){
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN,"请先登录");
         }
@@ -196,6 +196,9 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         DocKnowledgeBase knowledgeBase = getById(kbId);
         if(knowledgeBase == null){
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "知识库不存在");
+        }
+        if (!permissionService.canViewKnowledgeBase(kbId)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权收藏该知识库");
         }
         //检查该用户是否已经收藏了此知识库
         KbFavorite kbFavorite = kbFavoriteMapper.selectOne(Wrappers.<KbFavorite>lambdaQuery()
@@ -232,7 +235,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "知识库ID不能为空");
         }
 
-        Long currentId = currentUserUtil.getCurrentId();
+        Long currentId = SecurityUtils.getCurrentUserId();
         if (currentId == null) {
             return ResponseResult.errorResult(AppHttpCodeEnum.NEED_LOGIN, "请先登录");
         }
@@ -242,8 +245,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
             return ResponseResult.errorResult(AppHttpCodeEnum.PARAM_INVALID, "知识库不存在");
         }
 
-        if (!knowledgeBase.getOwnerId().equals(currentId)) {
-            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "只能删除自己创建的知识库");
+        if (!permissionService.canManageKnowledgeBase(kbId)) {
+            return ResponseResult.errorResult(AppHttpCodeEnum.NO_OPERATOR_AUTH, "无权管理该知识库");
         }
         knowledgeBase.setIsDeleted(DeleteConstants.DELETED);
         updateById(knowledgeBase);

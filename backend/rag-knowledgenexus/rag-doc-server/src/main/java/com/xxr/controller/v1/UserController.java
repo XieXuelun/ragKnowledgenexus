@@ -12,6 +12,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -125,6 +126,7 @@ public class UserController {
      */
     @GetMapping("/page")
     @ApiOperation(value = "获取用户列表")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult page(UserQueryDTO userQueryDTO) {
         return userService.pageQuery(userQueryDTO);
     }
@@ -136,6 +138,7 @@ public class UserController {
      */
     @DeleteMapping("/delete/{id}")
     @ApiOperation(value = "删除用户")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult delete(@PathVariable Long id){
         return userService.deleteUser(id);
     }
@@ -146,6 +149,7 @@ public class UserController {
      */
     @PostMapping("/status")
     @ApiOperation(value = "设置用户状态")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult setStatus(@RequestBody User user){
         return userService.setStatus(user);
     }

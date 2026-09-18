@@ -7,6 +7,7 @@ import com.xxr.service.DepartmentService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -64,6 +65,7 @@ public class DepartmentController {
      */
     @PostMapping("/create")
     @ApiOperation(value = "创建部门")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult create(@RequestBody Department department) {
         return departmentService.create(department);
     }
@@ -73,6 +75,7 @@ public class DepartmentController {
      */
     @PostMapping("/update")
     @ApiOperation(value = "更新部门")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult update(@RequestBody Department department) {
         return departmentService.update(department);
     }
@@ -82,6 +85,7 @@ public class DepartmentController {
      */
     @DeleteMapping("/delete/{id}")
     @ApiOperation(value = "删除部门")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseResult delete(@PathVariable Long id) {
         return departmentService.delete(id);
     }

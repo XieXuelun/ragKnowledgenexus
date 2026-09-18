@@ -4,7 +4,6 @@ import lombok.Data;
 
 /**
  * 新用户注册请求DTO
- * 仅管理员创建用户时使用
  */
 @Data
 public class UserRegisterDTO {
