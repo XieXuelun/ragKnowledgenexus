@@ -92,9 +92,12 @@ public class QaServiceImpl implements QaService {
         }
 
         // 3. 获取检索到的 chunk 内容
-        List<Long> chunkIds = searchResults.stream().map(QdrantIndexService.SearchResult::getChunkId).collect(Collectors.toList());
+        List<Long> chunkIds = searchResults.stream().map
+                (QdrantIndexService.SearchResult::getChunkId).collect(Collectors.toList());
         List<DocChunk> chunks = chunkMapper.selectBatchIds(chunkIds);
-        Map<Long, Float> scoreMap = searchResults.stream().collect(Collectors.toMap(QdrantIndexService.SearchResult::getChunkId, QdrantIndexService.SearchResult::getScore));
+        Map<Long, Float> scoreMap = searchResults.
+                stream().collect(Collectors.toMap(QdrantIndexService.SearchResult::getChunkId,
+                        QdrantIndexService.SearchResult::getScore));
 
         // 构建上下文
         StringBuilder context = new StringBuilder();
@@ -113,14 +116,16 @@ public class QaServiceImpl implements QaService {
         for (DocChunk c : chunks) {
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("chunkId", c.getId());
-            s.put("content", c.getContent().length() > 200 ? c.getContent().substring(0, 200) + "..." : c.getContent());
+            s.put("content", c.getContent().length()
+                    > 200 ? c.getContent().substring(0, 200) + "..." : c.getContent());
             s.put("score", scoreMap.getOrDefault(c.getId(), 0f));
             sources.add(s);
         }
 
         // 6. 保存消息
         QaMessage msg = saveMessage
-                (userId, conv.getId(), dto.getQuestion(), answer, JSON.toJSONString(sources), chatResult, dto.getSearchType());
+                (userId, conv.getId(), dto.getQuestion(),
+                        answer, JSON.toJSONString(sources), chatResult, dto.getSearchType());
 
         return ResponseResult.okResult(Map.of("messageId", msg.getId(), "answer", answer, "sources", sources));
     }

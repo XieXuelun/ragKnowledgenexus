@@ -4,14 +4,12 @@
 
     <select id="selectList" parameterType="map" resultType="com.xxr.document.vos.DocDocumentVO">
         select d.*,kb.name as knowledgeName from doc_document d
-        left join doc_knowledge_base kb on d.kb_id=kb.id
+        left join doc_knowledge_base kb on d.kb_id=kb.id  and kb.is_deleted=0
         <where>
             <!-- 全局强制：必须未删除 -->
             d.is_deleted=0
-            and kb.is_deleted=0
-
-            <if test="map.kbId != null and map.kbId != ''">
-                and d.kb_id =#{map.kbId}
+            <if test="map.kb_Id != null and map.kb_Id != ''">
+                and d.kb_id =#{map.kb_Id}
             </if>
             <if test="map.keyword != null and map.keyword !='' ">
                 and d.title like concat('%',#{map.keyword},'%')
@@ -22,13 +20,15 @@
             <if test="map.parseStatus != null">
                 and d.parse_status=#{map.parseStatus}
             </if>
-
-            <!-- 权限条件 全部包起来 -->
+          <!-- 权限条件 全部包起来 -->
             <if test="!map.isAdmin">
                 and (
-                d.upload_user_id=#{map.userId}
-                or kb.visibility=2
-                or (kb.visibility=1 and kb.dept_id in (select dept_id from sys_user where id=#{map.userId}))
+                -- 文档是自己上传的（文档没有知识库也满足）
+                d.upload_user_id = #{map.userId}
+                -- 文档绑定了知识库，并且知识库公开
+                or (d.kb_id is not null and kb.visibility = 2)
+                -- 文档绑定了知识库，知识库部门可见，用户属于该部门
+                or (d.kb_id is not null and kb.visibility = 1 and kb.dept_id in (select dept_id from sys_user where id=#{map.userId}))
                 )
             </if>
         </where>

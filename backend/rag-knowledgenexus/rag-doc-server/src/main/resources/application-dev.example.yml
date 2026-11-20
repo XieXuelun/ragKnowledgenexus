@@ -1,5 +1,6 @@
 # =====================================================================
-# RAG 知识库系统 Spring Boot 配置文件
+# 开发环境配置示例
+# 复制为 application-dev.yml 后填入本地实际值；application-dev.yml 已被 .gitignore 忽略
 # =====================================================================
 
 spring:
@@ -16,9 +17,9 @@ spring:
       max-request-size: 50MB
 
   datasource:
-    url: jdbc:mysql://192.168.150.101:3306/rag_knowledge_base?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&allowMultiQueries=true
+    url: jdbc:mysql://127.0.0.1:3306/rag_knowledge_base?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&allowMultiQueries=true
     username: root
-    password: root123
+    password: <mysql-password>
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 20
@@ -27,10 +28,11 @@ spring:
       max-lifetime: 1800000
       connection-timeout: 30000
 
+  # 当前代码未使用 Redis，保留配置仅为兼容依赖
   redis:
-    host: 192.168.150.101
+    host: 127.0.0.1
     port: 6379
-    password: redis123
+    password: <redis-password>
     database: 0
     timeout: 5000ms
     lettuce:
@@ -44,14 +46,11 @@ mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
-# =====================================================================
-# 项目自定义配置
-# =====================================================================
 rag:
   minio:
-    endpoint: http://192.168.150.101:9000
-    access-key: minioadmin
-    secret-key: minioadmin
+    endpoint: http://127.0.0.1:9000
+    access-key: <minio-access-key>
+    secret-key: <minio-secret-key>
     bucket:
       document: rag-documents
       avatar: user-avatar
@@ -60,26 +59,22 @@ rag:
   embedding:
     provider: aliyun
     model: text-embedding-v3
-    api-key: sk-344e7a17e33949559ae5aaad3b59b148
+    api-key: <dashscope-api-key>
     api-url: https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
 
   chat:
     provider: aliyun
     model: qwen-plus
-    api-key: sk-344e7a17e33949559ae5aaad3b59b148
+    api-key: <dashscope-api-key>
     api-url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 
   qdrant:
-    host: 192.168.150.101
+    host: 127.0.0.1
     port: 6334
     http-port: 6333
     use-tls: false
     dimension: 1024
 
-
-# =====================================================================
-# 日志配置
-# =====================================================================
 logging:
   level:
     root: INFO
@@ -94,9 +89,6 @@ logging:
     max-size: 10MB
     max-history: 30
 
-# =====================================================================
-# 服务器配置
-# =====================================================================
 server:
   port: 8085
   servlet:
@@ -107,14 +99,3 @@ server:
   error:
     include-message: always
     include-stacktrace: on_param
-
-# =====================================================================
-# 开发环境特殊配置
-# =====================================================================
----
-
-logging:
-  level:
-    root: INFO
-    com.rag.system: DEBUG
-    org.springframework.web: DEBUG

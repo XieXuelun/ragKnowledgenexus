@@ -202,31 +202,30 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, DocKnowle
         }
         //检查该用户是否已经收藏了此知识库
         KbFavorite kbFavorite = kbFavoriteMapper.selectOne(Wrappers.<KbFavorite>lambdaQuery()
-                .eq(KbFavorite::getKbId, kbId)
                 .eq(KbFavorite::getUserId, currentId)
-                .orderByDesc(KbFavorite::getCreateTime)); // 获取最新的记录
-        
-        if(kbFavorite == null || kbFavorite.getIsDeleted().equals(DeleteConstants.DELETED)) {
-            // 之前未收藏或已取消收藏，现在要收藏
-            if(kbFavorite == null) {
-                // 完全新建收藏记录
-                kbFavorite = new KbFavorite();
-                kbFavorite.setKbId(kbId);
-                kbFavorite.setUserId(currentId);
-                kbFavorite.setCreateTime(LocalDateTime.now());
-                kbFavoriteMapper.insert(kbFavorite);
-            } else {
-                // 更新已存在的记录为未删除状态（重新收藏）
+                .eq(KbFavorite::getKbId, kbId));
+        //判断该用户是否已经收藏或者收藏过并取消
+        if(kbFavorite==null||kbFavorite.getIsDeleted().equals(DeleteConstants.DELETED)){
+            if(kbFavorite==null){
+                //为空，从未收藏，新添
+                KbFavorite kbFavorite1=new KbFavorite();
+                kbFavorite1.setKbId(kbId);
+                kbFavorite1.setUserId(currentId);
+                kbFavorite1.setCreateTime(LocalDateTime.now());
+                kbFavorite1.setIsDeleted(DeleteConstants.NOT_DELETED);
+                kbFavoriteMapper.insert(kbFavorite1);
+            }else{
+                //收藏但取消,重新收藏
                 kbFavorite.setIsDeleted(DeleteConstants.NOT_DELETED);
                 kbFavoriteMapper.updateById(kbFavorite);
             }
-            return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
-        } else {
-            // 已经收藏，现在要取消收藏
+        }else{
+            //收藏状态，更新为取消收藏
             kbFavorite.setIsDeleted(DeleteConstants.DELETED);
             kbFavoriteMapper.updateById(kbFavorite);
-            return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
+
         }
+        return ResponseResult.okResult(AppHttpCodeEnum.SUCCESS);
     }
 
     @Override
